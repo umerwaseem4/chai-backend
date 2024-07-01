@@ -22,8 +22,12 @@ app.use(express.static('public'));
 app.use(cookieParser());
 
 // custom routes
-import userRoute from './routes/user.routes.js'
+import userRoute from './routes/user.routes.js';
+import todoRoute from './routes/todo.routes.js';
+import commentRoute from './routes/comment.route.js';
 
-app.use('/api/v1/users', userRoute)
+app.use('/api/v1/users', userRoute);
+app.use('/api/v1/todo', todoRoute);
+app.use('/api/v1/comment', commentRoute);
 
 export { app };

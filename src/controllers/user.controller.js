@@ -4,6 +4,7 @@ import { User } from '../models/user.model.js';
 import { uploadOnCloudinary } from '../utils/cloudinary.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'jsonwebtoken';
 
 // methods to generate tokens
 
@@ -230,4 +231,109 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     }
 });
 
-export { registerUser, loginUser, logoutUser, refreshAccessToken };
+const changeCurrectPassword = asyncHandler(async (req, res) => {
+    const { oldPassword, newPassword } = req.body;
+
+    try {
+        const findingUser = await User.findById(req.user?._id);
+
+        if (!findingUser) {
+            throw new ApiError(404, 'User not founded');
+        }
+
+        const isPasswordCorrect =
+            await findingUser.isPasswordCorrect(oldPassword);
+
+        if (!isPasswordCorrect) {
+            throw new ApiError(400, 'Password is incorrect!');
+        }
+
+        findingUser.password = newPassword;
+        await findingUser.save({ validateBeforeSave: false });
+
+        return res
+            .status(200)
+            .json(new ApiResponse(200, {}, 'Password changed successfully!'));
+    } catch (error) {
+        new ApiError(500, 'something went wrong!');
+    }
+});
+
+const getCurrentUser = asyncHandler(async (req, res) => {
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(200, req.user, 'current user fetched successfully')
+        );
+});
+
+const getUserChannelProfiles = asyncHandler(async (req, res) => {
+    const { username } = req.params;
+
+    if (!username?.trim) {
+        throw new ApiError(400, 'usernmae is missing!');
+    }
+
+    const channel = await User.aggregate([
+        {
+            $match: {
+                username: username?.toLowerCase(),
+            },
+        },
+        {
+            $lookup: {
+                from: 'subcriptions',
+                localField: '_id',
+                foreignField: 'channel',
+                as: 'subscribers',
+            },
+        },
+        {
+            $lookup: {
+                from: 'subcriptions',
+                localField: '_id',
+                foreignField: 'subscriber',
+                as: 'subscribedTo',
+            },
+        },
+        {
+            $addFields: {
+                subscribersCount: {
+                    $size: '$subscribers',
+                },
+                channelSubscribedToCount: {
+                    $size: '$subscribedTo',
+                },
+                isSubscribed: {
+                    $cond: {
+                        if: {$in: [req.user?.id, "$subscribers.subscriber"]},
+                        then: true,
+                        else: false
+                    }
+                }
+            },
+        },
+        {
+            $project: {
+                fullname: 1,
+                username: 1,
+                subscribersCount: 1,
+                channelsSubscribedToCount: 1,
+                isSubscribed: 1,
+                avatar: 1,
+                coverImage: 1,
+                email: 1
+            }
+        }
+    ]);
+});
+
+export {
+    registerUser,
+    loginUser,
+    logoutUser,
+    refreshAccessToken,
+    changeCurrectPassword,
+    getCurrentUser,
+    getUserChannelProfiles,
+};
